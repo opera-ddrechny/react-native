@@ -48,6 +48,22 @@ RCT_EXPORT_MODULE()
 
 - (BOOL)canHandleRequest:(NSURLRequest *)request
 {
+  static NSMutableSet<NSString *> *allowedHostnames = [NSMutableSet set];
+  static dispatch_once_t allowedHostnamesOnceToken;
+
+  dispatch_once(&allowedHostnamesOnceToken, ^{
+    NSString *path = [[NSBundle mainBundle] pathForResource:@"allowed-hostnames" ofType:@"txt"];
+    NSString *contents = [[NSString alloc] initWithContentsOfFile:path encoding:NSUTF8StringEncoding error:NULL];
+    [contents enumerateLinesUsingBlock:^(NSString * _Nonnull line, BOOL * _Nonnull stop) {
+      [allowedHostnames addObject:line];
+    }];
+  });
+
+  if (![allowedHostnames containsObject:request.URL.host]) {
+    NSLog(@"Request to %@ is not allowed", request.URL.host);
+    return NO;
+  }
+
   static NSSet<NSString *> *schemes = nil;
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
@@ -55,6 +71,7 @@ RCT_EXPORT_MODULE()
     // but it's less efficient than using RCTFileRequestHandler
     schemes = [[NSSet alloc] initWithObjects:@"http", @"https", nil];
   });
+
   return [schemes containsObject:request.URL.scheme.lowercaseString];
 }
 
