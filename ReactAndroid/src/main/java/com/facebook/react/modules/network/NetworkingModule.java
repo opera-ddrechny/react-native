@@ -24,8 +24,11 @@ import com.facebook.react.common.StandardCharsets;
 import com.facebook.react.common.network.OkHttpCallUtil;
 import com.facebook.react.module.annotations.ReactModule;
 import com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter;
+
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -106,6 +109,7 @@ public final class NetworkingModule extends NativeNetworkingAndroidSpec {
   private final List<RequestBodyHandler> mRequestBodyHandlers = new ArrayList<>();
   private final List<UriHandler> mUriHandlers = new ArrayList<>();
   private final List<ResponseHandler> mResponseHandlers = new ArrayList<>();
+  private final Set<String> mAllowedHostnames = new HashSet<>();
   private boolean mShuttingDown;
 
   /* package */ NetworkingModule(
@@ -122,7 +126,20 @@ public final class NetworkingModule extends NativeNetworkingAndroidSpec {
       }
       client = clientBuilder.build();
     }
+
     mClient = client;
+
+    try {
+      InputStream stream = getReactApplicationContext().getAssets().open("allowed-hostnames.txt");
+      BufferedReader reader = new BufferedReader(new InputStreamReader(stream));
+      String line = "";
+      while ((line = reader.readLine()) != null) {
+        mAllowedHostnames.add(line);
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+
     mCookieHandler = new ForwardingCookieHandler(reactContext);
     mCookieJarContainer = (CookieJarContainer) mClient.cookieJar();
     mShuttingDown = false;
@@ -272,9 +289,9 @@ public final class NetworkingModule extends NativeNetworkingAndroidSpec {
       boolean withCredentials) {
     final RCTDeviceEventEmitter eventEmitter = getEventEmitter("sendRequestInternal");
 
-    try {
-      Uri uri = Uri.parse(url);
+    Uri uri = Uri.parse(url);
 
+    try {
       // Check if a handler is registered
       for (UriHandler handler : mUriHandlers) {
         if (handler.supports(uri, responseType)) {
@@ -286,6 +303,11 @@ public final class NetworkingModule extends NativeNetworkingAndroidSpec {
       }
     } catch (IOException e) {
       ResponseUtil.onRequestError(eventEmitter, requestId, e.getMessage(), e);
+      return;
+    }
+
+    if (!mAllowedHostnames.contains(uri.getHost())) {
+      ResponseUtil.onRequestError(eventEmitter, requestId, "Request to " + uri.getHost() + " is not allowed", null);
       return;
     }
 
@@ -419,12 +441,12 @@ public final class NetworkingModule extends NativeNetworkingAndroidSpec {
             eventEmitter, requestId, "Payload is set but no content-type header specified", null);
         return;
       }
-      String uri = data.getString(REQUEST_BODY_KEY_URI);
+      String bodyUri = data.getString(REQUEST_BODY_KEY_URI);
       InputStream fileInputStream =
-          RequestBodyUtil.getFileInputStream(getReactApplicationContext(), uri);
+          RequestBodyUtil.getFileInputStream(getReactApplicationContext(), bodyUri);
       if (fileInputStream == null) {
         ResponseUtil.onRequestError(
-            eventEmitter, requestId, "Could not retrieve file for uri " + uri, null);
+            eventEmitter, requestId, "Could not retrieve file for uri " + bodyUri, null);
         return;
       }
       requestBody = RequestBodyUtil.create(MediaType.parse(contentType), fileInputStream);
