@@ -306,6 +306,8 @@ public final class NetworkingModule extends NativeNetworkingAndroidSpec {
       return;
     }
 
+    FLog.i(TAG, "Sending a request to " + uri.getHost());
+
     if (!mAllowedHostnames.contains(uri.getHost())) {
       ResponseUtil.onRequestError(eventEmitter, requestId, "Request to " + uri.getHost() + " is not allowed", null);
       return;

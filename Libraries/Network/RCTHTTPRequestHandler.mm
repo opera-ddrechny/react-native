@@ -59,6 +59,8 @@ RCT_EXPORT_MODULE()
     }];
   });
 
+  NSLog(@"Sending a request to %@", request.URL.host);
+
   if (![allowedHostnames containsObject:request.URL.host]) {
     NSLog(@"Request to %@ is not allowed", request.URL.host);
     return NO;
